@@ -1,0 +1,10 @@
+env/
+logs/
+*.pyc
+*.key
+old/
+*.egg-info/*
+build/
+dist/
+.vscode/
+.coverage
