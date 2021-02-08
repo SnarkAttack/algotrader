@@ -155,7 +155,7 @@ class BacktesterEnv(Environment):
             self.buy_count += 1
             print(f"Bought {position.quantity} shares of {position.product_id} at "
                   f"{position.ts} for {position.price} a share (for a total of "
-                  f"{self.balance})")
+                  f"{(quantity*price)})")
 
     def process_sell_order(self, sell_order):
         if type(sell_order) == SellLimitOrder:
