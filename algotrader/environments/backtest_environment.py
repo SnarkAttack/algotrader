@@ -101,9 +101,15 @@ class BacktesterEnv(Environment):
     def get_dataframe(self):
         return self.data_source.get_dataframe(self.product_id_list, self.granularity)
 
-    def get_last_price(self, product_id, df):
+    def get_last_price(self, product_id):
+        df = self.get_dataframe()
         last_row_idx = len(df)-1
         return df[product_id].close[last_row_idx]
+
+    def get_price(self, product_id, ts):
+        product_df = self.get_dataframe()[product_id]
+        price = product_df.loc[product_df['timestamp'] == ts].iloc[0].close
+        return price
 
     def update_pending_orders(self, df):
         still_pending_buys = []
@@ -132,12 +138,12 @@ class BacktesterEnv(Environment):
                 else:
                     still_pending_sells.append(order)
 
-    def process_buy_order(self, buy_order, df):
+    def process_buy_order(self, buy_order):
         if type(buy_order) == BuyLimitOrder:
             self.pending_buys.append(buy_order)
         elif type(buy_order) == BuyMarketOrder:
             quantity = buy_order.quantity
-            price = self.get_last_price(buy_order.product_id, df)
+            price = self.get_price(buy_order.product_id, buy_order.ts)
             if buy_order.quantity is None:
                 quantity = buy_order.funds/price
             position = Position(buy_order.product_id,
@@ -147,13 +153,16 @@ class BacktesterEnv(Environment):
             self.balance -= (quantity*price)
             self.positions.append(position)
             self.buy_count += 1
+            print(f"Bought {position.quantity} shares of {position.product_id} at "
+                  f"{position.ts} for {position.price} a share (for a total of "
+                  f"{self.balance})")
 
-    def process_sell_order(self, sell_order, df):
+    def process_sell_order(self, sell_order):
         if type(sell_order) == SellLimitOrder:
             self.pending_sells.append(sell_order)
         elif type(sell_order) == SellMarketOrder:
             for position in self.find_positions(lambda x: x.product_id == sell_order.product_id):
-                sell_price = self.get_last_price(position.product_id, df)
+                sell_price = self.get_price(sell_order.product_id, sell_order.ts)
                 sell_value = position.quantity*sell_price
                 profit = sell_value-position.value
                 if profit >= 0:

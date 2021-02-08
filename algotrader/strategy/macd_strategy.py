@@ -49,10 +49,7 @@ class MacdStrategy(Strategy):
                         ts = product_df.timestamp[last_row_idx]
                         price = product_df.close[last_row_idx]
                         buy_order = BuyMarketOrder(product_id, ts, funds=env.balance)
-                        print(f"Bought {quantity} shares of {product_id} at "
-                        f"{ts} for {price} a share (for a total of "
-                        f"{env.balance})")
-                        env.process_buy_order(buy_order, df)
+                        env.process_buy_order(buy_order)
                     else:
                         print("already holding trade")
                 elif macd_state == MACD_LOW:
@@ -65,7 +62,7 @@ class MacdStrategy(Strategy):
                                 ts,
                                 quantity=position.quantity,
                             )
-                            env.process_sell_order(sell_order, df)
+                            env.process_sell_order(sell_order)
                     else:
                         print("did not have active trade")
                 self.signals[product_id] = macd_state
