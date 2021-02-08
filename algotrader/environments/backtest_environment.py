@@ -1,5 +1,12 @@
 from cbpro_candles.candle_db import CoinbaseProCandleDatabase
-from ..environments.environment import Trade
+from ..environments.environment import (
+    Environment,
+    BuyLimitOrder,
+    BuyMarketOrder,
+    SellLimitOrder,
+    SellMarketOrder,
+    Position,
+)
 
 
 class BacktestReport(object):
@@ -17,7 +24,7 @@ class BacktestReport(object):
                  sell_count,
                  positive_trade_count,
                  negative_trade_count,
-                 outstanding_trades):
+                 outstanding_positions):
         self.product_id_list = product_id_list
         self.granularity = granularity
         self.start_balance = start_balance
@@ -30,9 +37,9 @@ class BacktestReport(object):
         self.sell_count = sell_count
         self.positive_trade_count = positive_trade_count
         self.negative_trade_count = negative_trade_count
-        self.outstanding_trades = outstanding_trades
+        self.outstanding_positions = outstanding_positions
 
-    @classmethod 
+    @classmethod
     def from_bt_env(cls, bt_env):
         total_balance = bt_env.balance + bt_env.get_asset_balance() - bt_env.fees
         profit = total_balance-bt_env.start_balance
@@ -49,10 +56,10 @@ class BacktestReport(object):
                               bt_env.sell_count,
                               bt_env.positive_trade_count,
                               bt_env.negative_trade_count,
-                              bt_env.trades)
+                              bt_env.positions)
 
     def get_current_holdings(self):
-        return ''.join([f"\n\t\t{trade.product_id} - {trade.quantity}" for trade in self.outstanding_trades])
+        return ''.join([f"\n\t\t{position.product_id} - {position.quantity}" for position in self.outstanding_positions])
 
     def get_products_str(self):
         return ', '.join([product_id for product_id in self.product_id_list])
@@ -77,42 +84,90 @@ class BacktestReport(object):
                 )
 
 
-class BacktesterEnv(object):
+class BacktesterEnv(Environment):
 
     def __init__(self,
                  data_source,
                  product_id_list,
                  granularity,
-                 start_balance=10000):
-        self.data_source = data_source
-        self.product_id_list = product_id_list
-        self.granularity = granularity
-        self.start_balance = start_balance
-        self.balance = start_balance
-        self.end_balance = start_balance
-        self.fees = 0
-        self.buy_count = 0
-        self.sell_count = 0
-        self.positive_trade_count = 0
-        self.negative_trade_count = 0
-        self.trades = []
+                 balance=10000):
+        super().__init__(data_source,
+                         product_id_list,
+                         granularity,
+                         balance)
+        self.start_balance = balance
+        self.end_balance = balance
 
     def get_dataframe(self):
         return self.data_source.get_dataframe(self.product_id_list, self.granularity)
 
-    def add_buy(self):
-        self.buy_count += 1
+    def get_last_price(self, product_id, df):
+        last_row_idx = len(df)-1
+        return df[product_id].close[last_row_idx]
 
-    def add_sell(self):
-        self.sell_count += 1
+    def update_pending_orders(self, df):
+        still_pending_buys = []
+        still_pending_sells = []
+        last_row_idx = len(df)-1
 
-    def add_positive_sell(self):
-        self.add_sell()
-        self.positive_trade_count += 1
+        for order in self.pending_buys:
+            product_id = order.product_id
+            if type(order) == BuyLimitOrder:
+                if df[product_id].close[last_row_idx] >= order.price:
+                    p = Position(product_id,
+                             order.size,
+                             df[product_id].timestamp[last_row_idx],
+                             order.price)
+                else:
+                    still_pending_buys.append(order)
+        self.pending_buys = still_pending_buys
 
-    def add_negative_sell(self):
-        self.add_sell()
-        self.negative_trade_count += 1
+        for order in self.pending_sells:
+            product_id = order.product_id
+            if type(order) == SellLimitOrder:
+                if df[product_id].close[last_row_idx] <= order.price:
+                    positions = self.find_positions(lambda x: x.product_id == product_id)
+                    for position in positions:
+                        self.sell_position(position, order.price)
+                else:
+                    still_pending_sells.append(order)
+
+    def process_buy_order(self, buy_order, df):
+        if type(buy_order) == BuyLimitOrder:
+            self.pending_buys.append(buy_order)
+        elif type(buy_order) == BuyMarketOrder:
+            quantity = buy_order.quantity
+            price = self.get_last_price(buy_order.product_id, df)
+            if buy_order.quantity is None:
+                quantity = buy_order.funds/price
+            position = Position(buy_order.product_id,
+                                quantity,
+                                buy_order.ts,
+                                price)
+            self.balance -= (quantity*price)
+            self.positions.append(position)
+            self.buy_count += 1
+
+    def process_sell_order(self, sell_order, df):
+        if type(sell_order) == SellLimitOrder:
+            self.pending_sells.append(sell_order)
+        elif type(sell_order) == SellMarketOrder:
+            for position in self.find_positions(lambda x: x.product_id == sell_order.product_id):
+                sell_price = self.get_last_price(position.product_id, df)
+                sell_value = position.quantity*sell_price
+                profit = sell_value-position.value
+                if profit >= 0:
+                    self.positive_trade_count += 1
+                else:
+                    self.negative_trade_count += 1
+                self.sell_position(position, sell_price)
+                self.sell_count += 1
+                print(f"Sold {position.quantity} shares of "
+                      f"{position.product_id} at {position.ts} "
+                      f"for {sell_price} a share (for a total "
+                      f"of {sell_value}, profit of "
+                      f"{profit}")
+                self.positions.remove(position)
 
     def add_sell_value(self, value):
         if value >= 0:
@@ -123,9 +178,9 @@ class BacktesterEnv(object):
     def get_asset_balance(self):
         asset_balance = 0
         df = self.get_dataframe()
-        for trade in self.trades:
-            current_price = self.get_dataframe()[trade.product_id].close[len(df)-1]
-            asset_balance += current_price*trade.quantity
+        for position in self.positions:
+            current_price = self.get_dataframe()[position.product_id].close[len(df)-1]
+            asset_balance += current_price*position.quantity
         return round(asset_balance, 2)
 
     def generate_backtest_report(self, graph_path=None):

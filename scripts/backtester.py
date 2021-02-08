@@ -90,7 +90,7 @@ def main():
     back_env = BacktesterEnv(data_source,
                              products,
                              args.granularity,
-                             start_balance=args.start_balance)
+                             balance=args.start_balance)
 
     if args.strategy == 'macd':
         strategy = MacdStrategy()

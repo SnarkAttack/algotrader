@@ -4,72 +4,74 @@ import uuid
 
 class Transaction(object):
 
-    def __init__(self, uuid=None):
-        if uuid is None:
-            uuid = uuid.uuid4()
-        self.uuid = uuid
+    def __init__(self, uid=None):
+        if uid is None:
+            uid = uuid.uuid4()
+        self.uuid = uid
 
 
 class Position(Transaction):
 
-    def __init__(self, product_id, quantity, time_acq, price_acq, uuid=None):
+    def __init__(self, product_id, quantity, ts, price, uuid=None):
         super().__init__(uuid)
         self.product_id = product_id
         self.quantity = quantity
-        self.time_acq = time_acq
-        self.price_acq = price_acq
+        self.ts = ts
+        self.price = price
+
+    @property
+    def value(self):
+        return self.quantity*self.price
 
 
 class BuyMarketOrder(Transaction):
 
-    def __init__(self, product_id, size=None, funds=None, uuid=None):
+    def __init__(self, product_id, ts, quantity=None, funds=None, uuid=None):
         super().__init__(uuid)
-        if size is None and funds is None:
+        if quantity is None and funds is None:
             raise ValueError("One of size or funds must not be null")
-        elif size is not None and funds is not None:
+        elif quantity is not None and funds is not None:
             raise ValueError("Only one of size and funds should be non-null")
-        self.size = size
+        self.product_id = product_id
+        self.ts = ts
+        self.quantity = quantity
         self.funds = funds
 
 
 class SellMarketOrder(Transaction):
 
-    def __init__(self, product_id, size=None, funds=None, uuid=None):
+    def __init__(self, product_id, ts, quantity=None, funds=None, uuid=None):
         super().__init__(uuid)
-        if size is None and funds is None:
+        if quantity is None and funds is None:
             raise ValueError("One of size or funds must not be null")
-        elif size is not None and funds is not None:
+        elif quantity is not None and funds is not None:
             raise ValueError("Only one of size and funds should be non-null")
-        self.size = size
+        self.product_id = product_id
+        self.ts = ts
+        self.quantity = quantity
         self.funds = funds
 
 
 class BuyLimitOrder(Transaction):
 
-    def __init__(self, product_id, price, size, cancel_after=None, uuid=None):
+    def __init__(self, product_id, ts, price, quantity, cancel_after=None, uuid=None):
         super().__init__(uuid)
+        self.product_id = product_id
+        self.ts = ts
         self.price = price
-        self.size = size
+        self.quantity = quantity
         self.cancel_after = cancel_after
 
 
 class SellLimitOrder(Transaction):
 
-    def __init__(self, product_id, price, size, cancel_after=None, uuid=None):
+    def __init__(self, product_id, ts, price, quantity, cancel_after=None, uuid=None):
         super().__init__(uuid)
-        self.price = price
-        self.size = size
-        self.cancel_after = cancel_after
-
-
-class Trade(object):
-
-    def __init__(self, product_id, ts, price, quantity, value):
         self.product_id = product_id
         self.ts = ts
         self.price = price
         self.quantity = quantity
-        self.value = value
+        self.cancel_after = cancel_after
 
 
 class Environment(object):
@@ -88,17 +90,22 @@ class Environment(object):
         self.sell_count = 0
         self.positive_trade_count = 0
         self.negative_trade_count = 0
+        self.pending_buys = []
+        self.pending_sells = []
         self.positions = []
-        self.start_time = datetime.now(tz=tiemzone.utc)
+        self.start_time = datetime.now(tz=timezone.utc)
 
     def find_positions(self, func):
         return [position for position in self.positions if func(position)]
 
-    def process_buy_order(self, buy_order):
-        self.buy_count += 1
+    def update_pending_orders(self):
+        pass
+
+    def process_buy_order(self, sell_order):
+        self.pending_buys.append(buy_order)
 
     def process_sell_order(self, trade):
-        self.sell_count += 1
+        self.pending_sells.append(sell_order)
 
-    def get_current_trades(self):
-        pass
+    def sell_position(self, pos, price):
+        self.balance += (price*pos.quantity)
