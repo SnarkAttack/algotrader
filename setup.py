@@ -24,7 +24,8 @@ setuptools.setup(
     ],
     entry_points={
         'console_scripts': [
-            'backtester = scripts.backtester:main'
+            'backtester = scripts.backtester:main',
+            'cryptowatch = scripts.cryptowatch_websocket_service:main'
         ],
     },
     python_requires='>=3.6',

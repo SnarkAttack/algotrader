@@ -4,7 +4,9 @@ from algotrader.backtest.backtest import Backtester
 from algotrader.environments.backtest_environment import BacktesterEnv
 from algotrader.strategy.macd_strategy import MacdStrategy
 from algotrader.strategy.rsi_macd_strategy import RsiMacdStrategy
+from algotrader.strategy.score_strategy import ScoreStrategy
 from algotrader.data_sources.coinbase_pro_data_sources import CoinbaseProDatabase
+from algotrader.data_sources.cryptowatch_eth_usd import CryptoWatchFile
 import argparse
 
 db_file = "../cbpro_candles/candles_test.db"
@@ -55,7 +57,7 @@ def main():
 
     parser = argparse.ArgumentParser()
 
-    list_of_strategies = ['macd', 'rsi_macd']
+    list_of_strategies = ['macd', 'rsi_macd', 'score']
 
     parser.add_argument('-s', '--strategy',
                         help='Type of strategy to use',
@@ -85,7 +87,8 @@ def main():
 
     backtester = Backtester()
 
-    data_source = CoinbaseProDatabase(db_file)
+    #data_source = CoinbaseProDatabase(db_file)
+    data_source = CryptoWatchFile()
 
     back_env = BacktesterEnv(data_source,
                              products,
@@ -96,6 +99,8 @@ def main():
         strategy = MacdStrategy()
     elif args.strategy == 'rsi_macd':
         strategy = RsiMacdStrategy()
+    elif args.strategy == 'score':
+        strategy = ScoreStrategy()
 
     backtester.backtest(back_env, strategy)
 

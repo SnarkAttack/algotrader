@@ -1,4 +1,5 @@
 from cbpro_candles.candle_db import CoinbaseProCandleDatabase
+from datetime import datetime, timezone
 from ..environments.environment import (
     Environment,
     BuyLimitOrder,
@@ -154,7 +155,7 @@ class BacktesterEnv(Environment):
             self.positions.append(position)
             self.buy_count += 1
             print(f"Bought {position.quantity} shares of {position.product_id} at "
-                  f"{position.ts} for {position.price} a share (for a total of "
+                  f"{datetime.fromtimestamp(position.ts)} for {position.price} a share (for a total of "
                   f"{(quantity*price)})")
 
     def process_sell_order(self, sell_order):
@@ -172,7 +173,7 @@ class BacktesterEnv(Environment):
                 self.sell_position(position, sell_price)
                 self.sell_count += 1
                 print(f"Sold {position.quantity} shares of "
-                      f"{position.product_id} at {position.ts} "
+                      f"{position.product_id} at {datetime.fromtimestamp(position.ts)} "
                       f"for {sell_price} a share (for a total "
                       f"of {sell_value}, profit of "
                       f"{profit}")
@@ -191,6 +192,9 @@ class BacktesterEnv(Environment):
             current_price = self.get_dataframe()[position.product_id].close[len(df)-1]
             asset_balance += current_price*position.quantity
         return round(asset_balance, 2)
+
+    def get_current_value(self):
+        return self.balance + self.get_asset_balance()
 
     def generate_backtest_report(self, graph_path=None):
         return BacktestReport.from_bt_env(self)
