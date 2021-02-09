@@ -103,9 +103,11 @@ class CryptoWatchWebsocket(object):
         self.printed = True
 
 
-    def connect(self):
+    def connect(self, pull_history=False):
         # Start receiving
         cw.stream.connect()
+        if pull_history:
+            self.database.populate_historical_data()
 
     def disconnect(self):
         # Call disconnect to close the stream connection
@@ -114,8 +116,7 @@ class CryptoWatchWebsocket(object):
 class CryptoWatchDatabase(object):
 
     def __init__(self,
-                 db_file='databases/cryptowatch_coinbase_pro_candles.db',
-                 pull_history=False):
+                 db_file='databases/cryptowatch_coinbase_pro_candles.db'):
         self.db_file = db_file
         sqlite3.register_adapter(Decimal, adapt_decimal)
         sqlite3.register_converter("decimal", convert_decimal)
@@ -123,9 +124,6 @@ class CryptoWatchDatabase(object):
         sqlite3.register_converter("iso_datetime", convert_iso_datetime)
         if not self.candle_table_exists():
             self.create_candle_table()
-            self.populate_historical_data()
-        elif pull_history:
-            self.populate_historical_data()
 
     def conn(self):
         conn = sqlite3.connect(self.db_file,
@@ -196,8 +194,9 @@ class CryptoWatchDatabase(object):
         exchange = "coinbase-pro"
         exchange_id = 2
 
+        print("Starting historical data pull")
         for market_id, pair in coinbase_pro_asset_ids.items():
-            print(f"{exchange}:{pair}")
+            print(f"Processing {exchange}:{pair}")
             response = cw.markets.get(f"{exchange}:{pair}", ohlc=True)
             self.populate_historical_data_period(market_id, "60", response.of_1m)
             self.populate_historical_data_period(market_id, "180", response.of_3m)
@@ -213,7 +212,6 @@ class CryptoWatchDatabase(object):
             self.populate_historical_data_period(market_id, "259200", response.of_3d)
             self.populate_historical_data_period(market_id, "604800", response.of_1w)
             self.populate_historical_data_period(market_id, "604800_Monday", response.of_1w_monday)
-            break
 
     def add_candle(self,
                    exchange_id,
