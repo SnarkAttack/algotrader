@@ -82,12 +82,9 @@ class CryptoWatchWebsocket(object):
     # What to do on each trade update
     def handle_intervals_update(self, interval_update):
         json_msg = json.loads(MessageToJson(interval_update))['marketUpdate']
-        #print(json_msg['marketUpdate'].keys())
         exchange_id = json_msg['market']['exchangeId']
         market_id = json_msg['market']['marketId']
         for interval in json_msg['intervalsUpdate']['intervals']:
-            if not self.printed:
-                print(interval)
             self.database.add_candle(
                 exchange_id,
                 market_id,
@@ -100,7 +97,6 @@ class CryptoWatchWebsocket(object):
                 Decimal(interval['volumeBaseStr']),
                 Decimal(interval['volumeQuoteStr'])
                 )
-        self.printed = True
 
 
     def connect(self, pull_history=False):
